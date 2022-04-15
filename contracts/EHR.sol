@@ -5,7 +5,6 @@ contract EHR {
     uint patientCount = 0;
     uint doctorCount = 0;
 
-
     struct Patient{
         string firstName;
         string lastName;
@@ -41,8 +40,8 @@ contract EHR {
     /// associate patient's wallet address with MedicalRecord
     mapping (address => MedicalRecord) records;
 
-    event PatientCreation(address indexed _patient, address indexed _doctor);
-    event DoctorCreation(address indexed _doctor);
+    event PatientCreation(string _patientFirstName, string _patientLastName, address indexed _patientAddress, bytes _patientPublicKey, address indexed _doctor);
+    event DoctorCreation(string _doctorFirstName, string _doctorLastName, address indexed _doctorAddress, bytes _doctorPublicKey);
     event DoctorAuth(address indexed _patient, address indexed _doctor, bool isAuthorized);
     event MedicalRecordView(address indexed _patient, address indexed _viewer);
     event MedicalRecordUpdate(address indexed _patient, address indexed _updator, bytes32 fileHash);
@@ -67,7 +66,7 @@ contract EHR {
         /// hash of null data
         records[_patientAddress].hash = 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855;
         patientCount++;
-        emit PatientCreation(_patientAddress, msg.sender);
+        emit PatientCreation(_firstName, _lastName, _patientAddress, _patientPublicKey, msg.sender);
     }
 
     function createDoctor(
@@ -85,7 +84,7 @@ contract EHR {
         doctors[_doctorAddress].pubKey = _doctorPublicKey;
         doctors[_doctorAddress].valid = true;
         doctorCount++;
-        emit DoctorCreation(_doctorAddress);
+        emit DoctorCreation(_firstName, _lastName, _doctorAddress, _doctorPublicKey);
     }
 
     function authorizeDoctor(address _doctorAddress) public
@@ -131,12 +130,53 @@ contract EHR {
         return address(uint160(uint256(keccak256(pubkey))));
     }
 
+    function getEHRHash(address _patientAddress) public view returns (bytes32) {
+        require(patients[_patientAddress].valid);
+        return records[_patientAddress].hash;
+    }
+
+    function getPatientFirstName(address _patientAddress) public view returns (string memory) {
+        require(patients[_patientAddress].valid);
+        return patients[_patientAddress].firstName;
+    }
+
+    function getPatientLastName(address _patientAddress) public view returns (string memory) {
+        require(patients[_patientAddress].valid);
+        return patients[_patientAddress].lastName;
+    }
+
+    function getDoctorFirstName(address _doctorAddress) public view returns (string memory) {
+        require(doctors[_doctorAddress].valid);
+        return doctors[_doctorAddress].firstName;
+    }
+
+    function getDoctorLastName(address _doctorAddress) public view returns (string memory) {
+        require(doctors[_doctorAddress].valid);
+        return doctors[_doctorAddress].lastName;
+    }
+
+    function getPublicKey(address _address) public view returns (bytes memory) {
+        require(patients[_address].valid || doctors[_address].valid);
+        if(patients[_address].valid) {
+            return patients[_address].pubKey;
+        } else {
+            return doctors[_address].pubKey;
+        }
+    }
+
+    function getDoctorCount() public view returns (uint) {
+        return doctorCount;
+    }
+
+    function getPatientCount() public view returns (uint) {
+        return patientCount;
+    }
+
     //input a signature and determine the v, r and s values
     function splitSignature(bytes memory signature) public pure
         returns (uint8 v, bytes32 r, bytes32 s)
     {
         require(signature.length == 65);
-
         assembly {
             // first 32 bytes, after the length prefix.
             r := mload(add(signature, 32))
@@ -145,7 +185,6 @@ contract EHR {
             // final byte (first byte of the next 32 bytes).
             v := byte(0, mload(add(signature, 96)))
         }
-
         return (v, r, s);
     }
 
